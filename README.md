@@ -1,7 +1,8 @@
 # orchestrator-worker-base
 
-Shared `run_worker()` loop for the inference orchestrator's Python
-workers. Every worker repo (classification, regression, whatever's
+Shared `run_worker()` loop for the inference orchestrator's Project(https://github.com/Jeremiah-Williams1/inference-orchestrator) for the Python workers.
+
+Every worker repo (classification, regression, whatever's
 next) installs this instead of duplicating Redis/BRPOP/Pushgateway
 plumbing.
 

@@ -17,15 +17,42 @@ def _now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def _json_safe_default(obj):
+    """
+    Fallback for json.dumps() when predict_fn's return value contains
+    something that isn't a plain JSON type. predict_fn authors should
+    already convert numpy arrays/scalars themselves (.tolist() / float()
+    / int()) -- this is a safety net for when that's forgotten, not a
+    substitute for doing it properly. Without this, a forgotten cast in
+    any worker's predict_fn would raise TypeError here and crash the
+    whole worker loop, not just fail that one job.
+    """
+    if hasattr(obj, "tolist"):  # numpy arrays AND numpy scalars both have this
+        return obj.tolist()
+    if hasattr(obj, "item"):  # other numpy/array-like scalar fallback
+        return obj.item()
+    return str(obj)  # last resort -- never let serialization itself crash the loop
+
+
 def _safe_set(r: "redis.Redis", job_key: str, job: dict) -> None:
     """
-    Write job state back to Redis, but don't let a Redis hiccup here crash
-    the whole loop -- the job has already been (or is about to be)
-    processed; losing the status write is recoverable, crashing the
+    Write job state back to Redis, but don't let a Redis hiccup -- or a
+    non-JSON-serializable value sneaking into job["result"] -- crash the
+    whole loop. The job has already been (or is about to be) processed;
+    losing/degrading the status write is recoverable, crashing the
     worker process is not.
     """
     try:
-        r.set(job_key, json.dumps(job), ex=JOB_TTL)
+        payload = json.dumps(job, default=_json_safe_default)
+    except Exception as e:
+        # _json_safe_default's str() fallback means this should be very
+        # rare, but if job itself is somehow unserializable, log and give
+        # up on this write rather than crash the loop.
+        log.error(f"failed to serialize job {job_key} for status write: {e}")
+        return
+
+    try:
+        r.set(job_key, payload, ex=JOB_TTL)
     except redis.exceptions.RedisError as e:
         log.error(f"failed to write status for {job_key}: {e}")
 

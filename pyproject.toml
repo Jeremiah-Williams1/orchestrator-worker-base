@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orchestrator-worker-base"
+version = "0.1.0"
+description = "Shared run_worker() loop for the inference orchestrator's Python workers."
+requires-python = ">=3.10"
+dependencies = [
+    "redis>=5.0,<6.0",
+    "prometheus_client>=0.20,<0.21",
+]
+
+# This is what makes `from base import run_worker` work after a plain
+# `pip install git+https://...` -- without this, setuptools wouldn't
+# know base.py is the thing to install, and pip install would silently
+# succeed while installing nothing usable.
+[tool.setuptools]
+py-modules = ["base"]
